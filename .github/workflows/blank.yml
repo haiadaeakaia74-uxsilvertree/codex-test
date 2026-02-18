@@ -2,14 +2,61 @@ name: daily-x-post
 
 on:
   schedule:
-    - cron: "0 21 * * *"   # 日本 6:00（JST）= UTC 21:00
+    # JST 06:00 = UTC 21:00（前日）
+    - cron: "0 21 * * *"
   workflow_dispatch:
 
 jobs:
   post:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Show time
-        run: date -u
-      - name: Placeholder
-        run: echo "ここでX投稿を実行する（まだ未設定）"
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: |
+          npm init -y
+          npm install twitter-api-v2
+
+      - name: Post to X
+        env:
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_KEY_SECRET: ${{ secrets.X_API_KEY_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+        run: |
+          node - <<'NODE'
+          const { TwitterApi } = require("twitter-api-v2");
+
+          const required = ["X_API_KEY","X_API_KEY_SECRET","X_ACCESS_TOKEN","X_ACCESS_TOKEN_SECRET"];
+          for (const k of required) {
+            if (!process.env[k]) {
+              console.error(`Missing env: ${k}`);
+              process.exit(1);
+            }
+          }
+
+          const client = new TwitterApi({
+            appKey: process.env.X_API_KEY,
+            appSecret: process.env.X_API_KEY_SECRET,
+            accessToken: process.env.X_ACCESS_TOKEN,
+            accessSecret: process.env.X_ACCESS_TOKEN_SECRET,
+          });
+
+          // とりあえず固定文（あとで“毎日変える”処理に置換）
+          const text = `おはようございます。今日の一杯は White & Dark。\n#silver_tree #自家焙煎 #コーヒー`;
+
+          (async () => {
+            const res = await client.v2.tweet(text);
+            console.log("Tweeted:", res.data?.id);
+          })().catch((e) => {
+            console.error(e);
+            process.exit(1);
+          });
+          NODE
